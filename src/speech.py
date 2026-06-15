@@ -1,13 +1,21 @@
-import pyttsx3
+import os
+import warnings
+
+# Suppress PyTorch internal warnings from Kokoro's model architecture
+warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+warnings.filterwarnings("ignore", category=FutureWarning, module="torch")
+# Suppress HuggingFace Hub unauthenticated-request warning (model is cached locally)
+os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+
+import sounddevice as sd
 import speech_recognition as sr
+from kokoro import KPipeline
 
-VOICE_ID = "com.apple.eloquence.en-US.Shelley"
-RATE = 180  # words per minute
+VOICE = "hf_alpha"  # American English female — most natural Kokoro voice
+SPEED = 1.5
 
-# Engine initialized once at import — no per-call process spawn or voice reload
-_engine = pyttsx3.init()
-_engine.setProperty("voice", VOICE_ID)
-_engine.setProperty("rate", RATE)
+# Pipeline loaded once at import — model stays in memory for all subsequent calls
+_pipeline = KPipeline(lang_code="a", repo_id="hexgrad/Kokoro-82M")  # explicit repo suppresses warning
 
 
 def list_microphones() -> list[tuple[int, str]]:
@@ -29,5 +37,8 @@ def recognize_speech_from_mic(mic_index: int) -> str:
 
 
 def speak_text(text: str) -> None:
-    _engine.say(text)
-    _engine.runAndWait()
+    # Kokoro splits long text into sentence chunks and yields each as it's ready,
+    # so audio starts playing before the full text is synthesised.
+    for _, _, audio in _pipeline(text, voice=VOICE, speed=SPEED):
+        sd.play(audio.numpy(), samplerate=24000)
+        sd.wait()
