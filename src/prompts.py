@@ -9,6 +9,13 @@ MODELS = {
     "5": ("deepseek-3.2",      "DeepSeek V3.2 — cheapest (0.25x credits)"),
 }
 
+CLAUDE_CLI_MODELS = {
+    "1": ("default", "default — your Claude Code default model"),
+    "2": ("sonnet",  "Claude Sonnet — best for interviews"),
+    "3": ("opus",    "Claude Opus — most capable"),
+    "4": ("haiku",   "Claude Haiku — fastest"),
+}
+
 
 def _base_prompt(feedback: bool) -> str:
     if feedback:

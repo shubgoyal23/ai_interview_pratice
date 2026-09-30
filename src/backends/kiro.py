@@ -1,3 +1,8 @@
+"""
+Backend: Kiro CLI (persistent PTY session via pexpect)
+Requires: kiro-cli installed and logged in
+"""
+
 import json
 import re
 import subprocess
@@ -6,33 +11,24 @@ from pathlib import Path
 
 import pexpect
 
-_PROJECT_ROOT = Path(__file__).parent.parent
+from src.backends import AIBackend
+
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
 _LOG_DIR = _PROJECT_ROOT / "logs"
 
-# Strips CSI, Fe, and OSC escape sequences
 _ANSI = re.compile(
     r'\x1B(?:'
-    r'[@-Z\\-_]'                       # Fe sequences
-    r'|\[[0-?]*[ -/]*[@-~]'            # CSI sequences
-    r'|\][^\x07\x1b]*(?:\x07|\x1b\\)' # OSC sequences
+    r'[@-Z\\-_]'
+    r'|\[[0-?]*[ -/]*[@-~]'
+    r'|\][^\x07\x1b]*(?:\x07|\x1b\\)'
     r')'
 )
-
-# kiro streams responses by rewriting the current line with \r then new content.
-# After stripping ANSI the full response sits between the last \r and end-of-chunk.
 _CR_SPLIT = re.compile(r'\r(?!\n)')
 
 
-def _parse_interactive(raw: str) -> str:
-    """
-    kiro rewrites its output line in-place using bare \r (no newline).
-    The final rewrite is the complete response. We split on \r, strip ANSI from
-    each segment, then take the last segment that contains '> '.
-    """
-    segments = _CR_SPLIT.split(raw)
-    for seg in reversed(segments):
+def _parse(raw: str) -> str:
+    for seg in reversed(_CR_SPLIT.split(raw)):
         clean = _ANSI.sub('', seg)
-        # Skip input-prompt lines (kiro marks them with '% >')
         if '% >' in clean:
             continue
         if '> ' in clean:
@@ -55,9 +51,7 @@ def get_latest_session_id() -> str | None:
         return None
 
 
-class KiroSession:
-    """Persistent kiro-cli process — one process per interview session."""
-
+class KiroSession(AIBackend):
     def __init__(self, model: str, session_id: str | None = None):
         _LOG_DIR.mkdir(exist_ok=True)
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -71,20 +65,16 @@ class KiroSession:
             'kiro-cli', args,
             encoding='utf-8',
             timeout=120,
-            maxread=65536,          # large buffer so long responses aren't split
-            logfile=self._raw_log,  # every byte kiro writes goes here
+            maxread=65536,
+            logfile=self._raw_log,
             cwd=str(_PROJECT_ROOT),
         )
-        # Drain startup output, wait until kiro is ready for first input
         self._child.expect(r'\?2004h', timeout=20)
 
     def send(self, prompt: str) -> str:
         self._child.send(f'\x1b[200~{prompt}\x1b[201~\r')
-        # ▸ marks end of every response (credits line)
         self._child.expect('▸', timeout=120)
-        response = _parse_interactive(self._child.before)
-        # Wait for kiro to re-enable bracketed paste — only then is it ready
-        # for the next message. Sending too early causes the input to be dropped.
+        response = _parse(self._child.before)
         try:
             self._child.expect(r'\?2004h', timeout=15)
         except pexpect.TIMEOUT:

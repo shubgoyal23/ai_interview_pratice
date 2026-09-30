@@ -1,13 +1,13 @@
 import sys
 
-from src.config import get_session_id, save_session_id
-from src.kiro import KiroSession, get_latest_session_id
+from src.backends import AIBackend
 from src.logger import SessionLogger
 from src.prompts import build_system_prompt, split_feedback_response
 from src.speech import recognize_speech_from_mic, speak_text
 
 
 def run(
+    backend: AIBackend,
     model: str,
     mic_index: int,
     feedback_on: bool,
@@ -17,32 +17,19 @@ def run(
     logger = SessionLogger.create(model, resume_name, feedback_on)
     print(f"Logging to: logs/{logger.path.name}\n")
 
-    session_id = get_session_id()
+    system_prompt = build_system_prompt(feedback_on, resume_text)
 
-    print("Connecting to Kiro...")
-    kiro = KiroSession(model=model, session_id=session_id)
+    print("Starting interview...\n")
+    opening = backend.send(system_prompt)
+    if not opening:
+        print("No response from backend. Check credentials / connection.")
+        sys.exit(1)
+
+    current_question = opening
+    print(f"Interviewer: {current_question}\n")
+    speak_text(current_question)
 
     try:
-        if session_id:
-            print(f"Resuming session: {session_id}\n")
-            opening = kiro.send("Continue the interview from where we left off.")
-        else:
-            system_prompt = build_system_prompt(feedback_on, resume_text)
-            print("Starting interview...\n")
-            opening = kiro.send(system_prompt)
-            new_id = get_latest_session_id()
-            if new_id:
-                save_session_id(new_id)
-                print(f"Session saved: {new_id}\n")
-
-        if not opening:
-            print("No response from Kiro. Run `kiro-cli whoami` to check login status.")
-            sys.exit(1)
-
-        current_question = opening
-        print(f"Interviewer: {current_question}\n")
-        speak_text(current_question)
-
         while True:
             try:
                 print("Your turn (Ctrl+C to end)...")
@@ -55,13 +42,12 @@ def run(
                 continue
 
             if not answer:
-                print("No answer detected. Try again.")
                 continue
 
-            print("Kiro thinking...")
-            raw_response = kiro.send(answer)
+            print("Thinking...")
+            raw_response = backend.send(answer)
             if not raw_response:
-                print("No response from Kiro.")
+                print("No response. Try again.")
                 continue
 
             if feedback_on:
@@ -78,7 +64,6 @@ def run(
                 current_question = raw_response
                 print(f"\nInterviewer: {current_question}\n")
                 speak_text(current_question)
-
     finally:
-        kiro.close()
+        backend.close()
         logger.close()

@@ -13,3 +13,6 @@ wheels/
 config.json
 logs/
 resume.pdf
+
+# Candidate profile (personal data)
+profile.json
