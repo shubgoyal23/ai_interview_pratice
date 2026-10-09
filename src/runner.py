@@ -3,6 +3,7 @@ import sys
 from src.backends import AIBackend
 from src.logger import SessionLogger
 from src.prompts import build_system_prompt, split_feedback_response
+from src.recorder import Recorder
 from src.speech import recognize_speech_from_mic, speak_text
 
 
@@ -15,12 +16,16 @@ def run(
     resume_name: str | None = None,
     resumed: bool = False,
     resume_cmd: str | None = None,
+    record: bool = False,
 ) -> None:
     logger = SessionLogger.create(
         model, resume_name, feedback_on,
         session_id=backend.session_id, resume_cmd=resume_cmd, resumed=resumed,
     )
     print(f"Logging to: logs/{logger.path.name}")
+    recorder = Recorder(logger.path.with_suffix(".wav")) if record else None
+    if recorder:
+        print(f"Recording to: logs/{recorder.path.name}")
     if backend.session_id:
         print(f"Session ID: {backend.session_id}")
     if resume_cmd:
@@ -44,15 +49,17 @@ def run(
 
     current_question = opening
     print(f"Interviewer: {current_question}\n")
-    speak_text(current_question)
+    speak_text(current_question, recorder)
 
     try:
         while True:
             try:
                 print("Your turn (Ctrl+C to end)...")
-                answer = recognize_speech_from_mic(mic_index)
+                answer = recognize_speech_from_mic(mic_index, recorder)
             except KeyboardInterrupt:
                 print(f"\nInterview ended. Log saved to: logs/{logger.path.name}")
+                if recorder:
+                    print(f"Recording saved to: logs/{recorder.path.name}")
                 break
             except Exception as e:
                 print(f"Could not understand audio: {e}. Try again.")
@@ -71,16 +78,18 @@ def run(
                 feedback, next_question = split_feedback_response(raw_response)
                 if feedback:
                     print(f"\nFeedback: {feedback}")
-                    speak_text(feedback)
+                    speak_text(feedback, recorder)
                 print(f"\nInterviewer: {next_question}\n")
-                speak_text(next_question)
+                speak_text(next_question, recorder)
                 logger.log_entry(current_question, answer, feedback or None)
                 current_question = next_question
             else:
                 logger.log_entry(current_question, answer, None)
                 current_question = raw_response
                 print(f"\nInterviewer: {current_question}\n")
-                speak_text(current_question)
+                speak_text(current_question, recorder)
     finally:
         backend.close()
         logger.close()
+        if recorder:
+            recorder.close()

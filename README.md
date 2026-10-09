@@ -35,6 +35,7 @@ uv run main.py --backend anthropic          # choose AI backend (default: claude
 uv run main.py --profile other.json         # use a different profile (default: profile.json)
 uv run main.py --no-feedback                # skip per-answer feedback
 uv run main.py --resume <session-id>        # continue an earlier interview (claude backend)
+uv run main.py --record                     # save interview audio (AI + you) to logs/<log name>.wav
 ```
 
 ### Resuming an interview

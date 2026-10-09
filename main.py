@@ -76,6 +76,10 @@ def main():
         "--resume", metavar="SESSION_ID",
         help="Continue an earlier interview (claude backend). The ID is in the log header.",
     )
+    parser.add_argument(
+        "--record", action="store_true",
+        help="Record the interview audio (AI voice + your answers) to logs/<log name>.wav",
+    )
     args = parser.parse_args()
 
     if args.resume and args.backend != "claude":
@@ -101,6 +105,7 @@ def main():
 
     print(f"Backend: {BACKENDS[args.backend]}")
     print(f"Feedback: {'ON' if args.feedback else 'OFF'}")
+    print(f"Recording: {'ON' if args.record else 'OFF'}")
 
     model = select_model(CLAUDE_CLI_MODELS if args.backend == "claude" else MODELS)
     test_speaker()
@@ -114,6 +119,8 @@ def main():
             flags.append(f"--profile {args.profile}")
         if not args.feedback:
             flags.append("--no-feedback")
+        if args.record:
+            flags.append("--record")
         resume_cmd = "uv run main.py " + " ".join(flags)
 
     run(
@@ -125,6 +132,7 @@ def main():
         resume_name=resume_name,
         resumed=bool(args.resume),
         resume_cmd=resume_cmd,
+        record=args.record,
     )
 
 

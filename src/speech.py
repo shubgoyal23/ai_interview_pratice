@@ -19,8 +19,10 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 from kokoro import KPipeline
 
-# VOICE = "af_heart"  # American English female — most natural Kokoro voice
-VOICE = "hf_alpha"  # hindi voice
+from src.recorder import Recorder
+
+VOICE = "af_heart"  # American English female — most natural Kokoro voice
+# VOICE = "hf_alpha"  # hindi voice
 SPEED = 1.2
 
 PAUSE_THRESHOLD = 2 #pause_threshold
@@ -59,7 +61,7 @@ def _show_live(text: str) -> None:
     sys.stdout.flush()
 
 
-def recognize_speech_from_mic(mic_index: int) -> str:
+def recognize_speech_from_mic(mic_index: int, recorder: Recorder | None = None) -> str:
     r = sr.Recognizer()
     chunks: queue.Queue[np.ndarray] = queue.Queue()
     stop = threading.Event()
@@ -104,6 +106,8 @@ def recognize_speech_from_mic(mic_index: int) -> str:
             thread.join()
 
     audio = np.concatenate(buffer).astype(np.float32) / 32768
+    if recorder:
+        recorder.add(audio, SAMPLE_RATE_IN, "user")
     text = _transcribe(audio, final=True)
     sys.stdout.write("\r\033[K")
     print(f"You said: {text}")
@@ -132,8 +136,10 @@ def _normalise(text: str) -> list[str]:
     return [p.strip() for p in text.split('\n\n') if p.strip()]
 
 
-def speak_text(text: str) -> None:
+def speak_text(text: str, recorder: Recorder | None = None) -> None:
     for para in _normalise(text):
         for _, _, audio in _pipeline(para, voice=VOICE, speed=SPEED):
+            if recorder:
+                recorder.add(audio.numpy(), 24000, "ai")
             sd.play(audio.numpy(), samplerate=24000)
             sd.wait()
