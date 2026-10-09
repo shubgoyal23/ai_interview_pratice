@@ -19,7 +19,8 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 from kokoro import KPipeline
 
-VOICE = "af_heart"  # American English female — most natural Kokoro voice
+# VOICE = "af_heart"  # American English female — most natural Kokoro voice
+VOICE = "hf_alpha"  # hindi voice
 SPEED = 1.2
 
 PAUSE_THRESHOLD = 2 #pause_threshold

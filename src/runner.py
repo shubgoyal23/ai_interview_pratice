@@ -13,14 +13,31 @@ def run(
     feedback_on: bool,
     resume_text: str | None = None,
     resume_name: str | None = None,
+    resumed: bool = False,
+    resume_cmd: str | None = None,
 ) -> None:
-    logger = SessionLogger.create(model, resume_name, feedback_on)
-    print(f"Logging to: logs/{logger.path.name}\n")
+    logger = SessionLogger.create(
+        model, resume_name, feedback_on,
+        session_id=backend.session_id, resume_cmd=resume_cmd, resumed=resumed,
+    )
+    print(f"Logging to: logs/{logger.path.name}")
+    if backend.session_id:
+        print(f"Session ID: {backend.session_id}")
+    if resume_cmd:
+        print(f"Resume later with: {resume_cmd}")
+    print()
 
-    system_prompt = build_system_prompt(feedback_on, resume_text)
-
-    print("Starting interview...\n")
-    opening = backend.send(system_prompt)
+    if resumed:
+        # The AI already has the system prompt and earlier answers in this session
+        print("Resuming interview...\n")
+        opening = backend.send(
+            "The interview was paused and is now resuming. Keep the same interviewer "
+            "role and format. Briefly welcome the candidate back, then re-ask the last "
+            "unanswered question, or ask the next question if the last one was answered."
+        )
+    else:
+        print("Starting interview...\n")
+        opening = backend.send(build_system_prompt(feedback_on, resume_text))
     if not opening:
         print("No response from backend. Check credentials / connection.")
         sys.exit(1)

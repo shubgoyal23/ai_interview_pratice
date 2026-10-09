@@ -11,7 +11,10 @@ class SessionLogger:
         self._file = file
 
     @classmethod
-    def create(cls, model: str, resume_name: str | None, feedback_on: bool) -> "SessionLogger":
+    def create(
+        cls, model: str, resume_name: str | None, feedback_on: bool,
+        session_id: str | None = None, resume_cmd: str | None = None, resumed: bool = False,
+    ) -> "SessionLogger":
         LOG_DIR.mkdir(exist_ok=True)
         version = len(list(LOG_DIR.glob("interview_v*.log"))) + 1
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -20,16 +23,23 @@ class SessionLogger:
         # Open once for the whole session; line-buffered so each \n flushes to OS
         file = log_path.open("w", buffering=1)
         logger = cls(log_path, file)
-        logger._write_header(model, resume_name, feedback_on)
+        logger._write_header(model, resume_name, feedback_on, session_id, resume_cmd, resumed)
         return logger
 
-    def _write_header(self, model: str, resume_name: str | None, feedback_on: bool) -> None:
+    def _write_header(
+        self, model: str, resume_name: str | None, feedback_on: bool,
+        session_id: str | None, resume_cmd: str | None, resumed: bool,
+    ) -> None:
         self._write("=" * 50)
         self._write(f"Interview Session: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self._write(f"Model: {model}")
         self._write(f"Feedback: {'on' if feedback_on else 'off'}")
         if resume_name:
             self._write(f"Resume: {resume_name}")
+        if session_id:
+            self._write(f"Session ID: {session_id}{' (resumed)' if resumed else ''}")
+        if resume_cmd:
+            self._write(f"Resume with: {resume_cmd}")
         self._write("=" * 50)
         self._write("")
 

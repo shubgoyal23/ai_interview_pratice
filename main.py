@@ -21,7 +21,7 @@ BACKENDS = {
 }
 
 
-def create_backend(name: str, model: str):
+def create_backend(name: str, model: str, session_id: str | None = None):
     if name == "kiro":
         from src.backends.kiro import KiroSession
         from src.config import get_session_id, save_session_id
@@ -36,7 +36,7 @@ def create_backend(name: str, model: str):
 
     if name == "claude":
         from src.backends.claude_cli import ClaudeSession
-        return ClaudeSession(model=model)
+        return ClaudeSession(model=model, session_id=session_id)
 
     if name == "sgpt":
         from src.backends.gpt_cli import SGPTSession
@@ -72,7 +72,15 @@ def main():
         "--backend", choices=list(BACKENDS), default="claude",
         help="AI backend to use (default: claude)",
     )
+    parser.add_argument(
+        "--resume", metavar="SESSION_ID",
+        help="Continue an earlier interview (claude backend). The ID is in the log header.",
+    )
     args = parser.parse_args()
+
+    if args.resume and args.backend != "claude":
+        print("--resume currently works only with --backend claude.")
+        sys.exit(1)
 
     resume_text = None
     resume_name = None
@@ -97,7 +105,16 @@ def main():
     model = select_model(CLAUDE_CLI_MODELS if args.backend == "claude" else MODELS)
     test_speaker()
     mic_index = select_microphone()
-    backend = create_backend(args.backend, model)
+    backend = create_backend(args.backend, model, session_id=args.resume)
+
+    resume_cmd = None
+    if args.backend == "claude":
+        flags = [f"--backend claude --resume {backend.session_id}"]
+        if args.profile:
+            flags.append(f"--profile {args.profile}")
+        if not args.feedback:
+            flags.append("--no-feedback")
+        resume_cmd = "uv run main.py " + " ".join(flags)
 
     run(
         backend=backend,
@@ -106,6 +123,8 @@ def main():
         feedback_on=args.feedback,
         resume_text=resume_text,
         resume_name=resume_name,
+        resumed=bool(args.resume),
+        resume_cmd=resume_cmd,
     )
 
 
@@ -121,3 +140,4 @@ if __name__ == "__main__":
 #   uv run python main.py --backend sgpt                       # shell-gpt CLI
 #   uv run python main.py --profile other.json --backend anthropic
 #   uv run python main.py --no-feedback --backend openai
+#   uv run python main.py --backend claude --resume <session-id>   # continue a past interview
